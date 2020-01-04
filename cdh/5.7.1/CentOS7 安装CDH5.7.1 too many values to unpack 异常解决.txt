@@ -1,0 +1,44 @@
+CentOS7安装CDH5.7.1的时候报错
+
+[26/Feb/2019 23:39:00 +0000] 5852 MainThread agent        ERROR    Caught unexpected exception in main loop.
+Traceback (most recent call last):
+  File "/usr/lib64/cmf/agent/build/env/lib/python2.7/site-packages/cmf-5.7.1-py2.7.egg/cmf/agent.py", line 686, in start
+    self._init_after_first_heartbeat_response(heartbeat_response["data"])
+  File "/usr/lib64/cmf/agent/build/env/lib/python2.7/site-packages/cmf-5.7.1-py2.7.egg/cmf/agent.py", line 816, in _init_after_first_heartbeat_response
+    self.client_configs.load()
+  File "/usr/lib64/cmf/agent/build/env/lib/python2.7/site-packages/cmf-5.7.1-py2.7.egg/cmf/client_configs.py", line 682, in load
+    new_deployed.update(self._lookup_alternatives(fname))
+  File "/usr/lib64/cmf/agent/build/env/lib/python2.7/site-packages/cmf-5.7.1-py2.7.egg/cmf/client_configs.py", line 432, in _lookup_alternatives
+    return self._parse_alternatives(alt_name, out)
+  File "/usr/lib64/cmf/agent/build/env/lib/python2.7/site-packages/cmf-5.7.1-py2.7.egg/cmf/client_configs.py", line 444, in _parse_alternatives
+    path, _, _, priority_str = line.rstrip().split(" ")
+ValueError: too many values to unpack
+
+这种错误是python脚本命令报出来的，指把值赋给一个tuple变量时，变量个数不够的情况下会报错。
+之前在CentOS 6 上安装的时候是不会报错的。
+一般问题原因都是jdk版本冲突，openjdk没有卸载干净。解决方法也都是清理jdk。
+根据错误提示，查看python脚本，
+/usr/lib64/cmf/agent/build/env/lib/python2.7/site-packages/cmf-5.7.1-py2.7.egg/cmf/client_configs.py
+的444行，做如下修改即可：
+————————————————
+442     for line in output.splitlines():
+443       if line.startswith("/"):
+444         if len(line.rstrip().split(" "))<=4:
+445           path, _, _, priority_str = line.rstrip().split(" ")
+446         
+447           # Ignore the alternative if it's not managed by CM.
+448           if CM_MAGIC_PREFIX not in os.path.basename(path):
+449             continue
+450         
+451           try:
+452             priority = int(priority_str)
+453           except ValueError:
+454             THROTTLED_LOG.info("Failed to parse %s: %s", name, line)
+455         
+456           key = ClientConfigKey(name, path)
+457           value = ClientConfigValue(priority, self._read_generation(path))
+458           ret[key] = value
+459         else:
+460           pass
+461     return ret
+————————————————
